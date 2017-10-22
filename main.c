@@ -15,11 +15,14 @@
  * $Id: _main.c.in,v 1.21 2004/10/14 20:11:39 corbet Exp $
  */
 
-#include <linux/config.h>
+#include <linux/sched.h>
+#include <linux/fs_struct.h>
+#include <linux/memcontrol.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/init.h>
 #include <linux/kernel.h>	/* printk() */
+#include <linux/slab_def.h>
 #include <linux/slab.h>		/* kmalloc() */
 #include <linux/fs.h>		/* everything... */
 #include <linux/errno.h>	/* error codes */
@@ -49,7 +52,7 @@ int scullc_trim(struct scullc_dev *dev);
 void scullc_cleanup(void);
 
 /* declare one cache pointer: use it for all devices */
-kmem_cache_t *scullc_cache;
+struct kmem_cache *scullc_cache;
 
 
 
@@ -410,7 +413,8 @@ struct async_work {
 static void scullc_do_deferred_op(void *p)
 {
 	struct async_work *stuff = (struct async_work *) p;
-	aio_complete(stuff->iocb, stuff->result, 0);
+	stuff->iocb->ki_complete(stuff->iocb, stuff->result, 0);
+	//aio_complete(stuff->iocb, stuff->result, 0); - based on commit 04b2fa9f8f36ec6fb6fd1c9dc9df6fff0cd27323
 	kfree(stuff);
 }
 
