@@ -404,17 +404,23 @@ loff_t scullc_llseek (struct file *filp, loff_t off, int whence)
 struct async_work {
 	struct kiocb *iocb;
 	int result;
-	struct work_struct work;
+	//work_struct is now delayed_work for delayed actions
+	struct delayed_work work;
 };
 
 /*
  * "Complete" an asynchronous operation.
- */
-static void scullc_do_deferred_op(void *p)
+ *
+ * 4.14 update - instead of void pointer now takes work_struct which is passed by INIT_DELAYED_WORK macro
+ *
+*/
+
+static void scullc_do_deferred_op(struct work_struct *w)
 {
-	struct async_work *stuff = (struct async_work *) p;
+	struct async_work *stuff = container_of(w, struct async_work, work);
+	/*4.14 update - replaced aio_complete call based on commit 04b2fa9f8f36ec6fb6fd1c9dc9df6fff0cd27323 */
+	/*aio_complete(stuff->iocb, stuff->result, 0);*/
 	stuff->iocb->ki_complete(stuff->iocb, stuff->result, 0);
-	//aio_complete(stuff->iocb, stuff->result, 0); - based on commit 04b2fa9f8f36ec6fb6fd1c9dc9df6fff0cd27323
 	kfree(stuff);
 }
 
@@ -441,7 +447,9 @@ static int scullc_defer_op(int write, struct kiocb *iocb, char __user *buf,
 		return result; /* No memory, just complete now */
 	stuff->iocb = iocb;
 	stuff->result = result;
-	INIT_WORK(&stuff->work, scullc_do_deferred_op, stuff);
+	/* 4.14 update - INIT_WORK(&stuff->work, scullc_do_deferred_op, stuff); */
+	/*INIT_DELAYED_WORK requires a delayed_work struct to populate */
+	INIT_DELAYED_WORK(&stuff->work, scullc_do_deferred_op);
 	schedule_delayed_work(&stuff->work, HZ/100);
 	return -EIOCBQUEUED;
 }
